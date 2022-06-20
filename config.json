@@ -1,0 +1,42 @@
+{
+    "project-name":"OC-differentiation",
+    "outdir":"Results",
+    "reference":
+      {
+            "name":"gencode_GRCh37",
+            "description":"Homo sapiens gencode GRCh37",
+            "hisat2_genome_index_base":"/home/rob/shares/epistress/Bioinfo/Annotations/human/hg19.p13_no_alt_UCSC/hisat2Indexes_ConChr/genome_contChr",
+            "hisat2_splice_site_file":"/home/rob/shares/epistress/Bioinfo/Annotations/human/gencode_GRCh37/gencode.v35lift37.annotation.ss",
+            "fasta":"/home/rob/shares/epistress/Bioinfo/Annotations/human/hg19.p13_no_alt_UCSC/wholeGenomeFasta/genome_contChr.fa",
+            "gtf":"/home/rob/shares/epistress/Bioinfo/Annotations/human/gencode_GRCh37/gencode.v35lift37.annotation.gtf",
+            "biomart":"feb2014.archive.ensembl.org,ENSEMBL_MART_ENSEMBL,hsapiens_gene_ensembl"
+      },
+    "replicates":{
+        "OC_J3_min": {
+            "name":"OC_J3_min",
+            "samples":["OC_J3_min_rep1","OC_J3_min_rep2","OC_J3_min_rep3"]
+            },
+        "OC_J7_min": {
+            "name":"OC_J7_min",
+            "samples":["OC_J7_min_rep1","OC_J7_min_rep2","OC_J7_min_rep3"]
+            },
+        "OC_J7_diff": {
+            "name":"OC_J7_diff",
+            "samples":["OC_J7_diff_rep1","OC_J7_diff_rep2","OC_J7_diff_rep3"]
+            },
+        "OC_J10_min": {
+            "name":"OC_J10_min",
+            "samples":["OC_J10_min_rep1","OC_J10_min_rep2","OC_J10_min_rep3"]
+            },
+        "OC_J10_diff": {
+            "name":"OC_J10_diff",
+            "samples":["OC_J10_diff_rep1","OC_J10_diff_rep2","OC_J10_diff_rep3"]
+            }
+    },
+    "prinseq-meanquality":"30",
+    "cutadapt-forward":"AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC",
+    "cutadapt-reverse":"AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT",
+    "library-type":"fr",
+    "read-length":"42",
+    "align-cpu":"12"
+}

@@ -1,0 +1,126 @@
+import os
+import sys
+import errno
+import json
+
+# def getFastqFileDict():
+#     fileDict={}
+#     for s in config["samples"]:
+#         fileDict[s['sample']]=[s['files']['forward'],s['files']['reverse']]
+#     return fileDict
+def getFastqFileFW(wildcards):
+    for s in config["samples"]:
+        if (s["sample"]== wildcards.sampleName):
+            return s["files"]["forward"]
+
+def getFastqFileRV(wildcards):
+    for s in config["samples"]:
+        if (s["sample"]== wildcards.sampleName):
+            return s["files"]["reverse"]
+
+def getConditions():
+	sampleList = list()
+	for cond in config["replicates"].keys():
+		for s in config["replicates"][cond]["samples"]:
+			sd = dict()
+			sd["samplename"] = s
+			sd["filename"] = s
+			sd["condition"] = cond
+			sampleList.append(sd)
+	return sampleList
+####################	 CMD to launch pipeline   ############################
+## snakemake --config projf="project.json" reff="references.json" conff="config.json" -nrp
+
+########## loading configuration variable ##################
+configfile: config["projf"]
+configfile: config["conff"]
+
+sample_all = list()
+for s in config["samples"]:
+    sample_all.append(s["sample"])
+
+OUTPUTDIR="Results"
+GTF=config["reference"]["gtf"]
+
+HS2_GENOME_INDEX = config["reference"]["hisat2_genome_index_base"]
+FASTA = config["reference"]["fasta"]
+SCRIPTPATH = "/home/rob/Documents/tools/RNASeq/RNAseq_quantif_pipeline/scripts"
+
+BIOMART = config["reference"]["biomart"]
+REFNAME = config["reference"]["name"]
+SSfile = config["reference"]["hisat2_splice_site_file"]
+
+LOGFCTHRESHOLD=1
+FDRTHRESHOLD=0.05
+
+rule all:
+    input:
+        expand(OUTPUTDIR+"/DESEQ2/featureCounts/{sampleName}",sampleName=sample_all),
+        expand(OUTPUTDIR+"/DESEQ2/stringTie/{sampleName}/gene_abundances.tsv",sampleName=sample_all)
+
+rule filterFastp:
+    input: R1=getFastqFileFW,
+        R2=getFastqFileRV
+    output: R1=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}_R1.fastq.gz",
+        R2=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}_R2.fastq.gz",
+        report=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}_report.txt",
+        html=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}.html"
+    threads: 6
+    shell:"""
+        fastp -i {input.R1} -o {output.R1} -I {input.R2} -O {output.R2} --detect_adapter_for_pe -q 30 --html {output.html} \
+        --thread {threads} > {output.report}
+    """
+
+rule align_PE_hisat2:
+    input:
+        R1=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}_R1.fastq.gz",
+        R2=OUTPUTDIR+"/Samples/{sampleName}/FASTP/{sampleName}_R2.fastq.gz"
+    output: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.sam"
+	threads: 12
+	shell:"""
+        hisat2 --threads {threads} --rna-strandness RF --downstream-transcriptome-assembly --rg "SM:{wildcards.sampleName}" \
+	--rg-id {wildcards.sampleName} --dta -x {HS2_GENOME_INDEX} -1 {input.R1} -2 {input.R2} \
+        -S {OUTPUTDIR}/Samples/{wildcards.sampleName}/hisat2/{wildcards.sampleName}.sam --known-splicesite-infile {SSfile} --met-file \
+        {OUTPUTDIR}/Samples/{wildcards.sampleName}/hisat2/{wildcards.sampleName}_metrics.txt --new-summary \
+        --summary-file {OUTPUTDIR}/Samples/{wildcards.sampleName}/hisat2/{wildcards.sampleName}_summary.txt
+    """
+
+rule sortSam:
+	input: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.sam"
+	output: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.sam"
+	threads: 6
+	shell:"""
+		samtools sort --threads {threads} -o {output} {input}
+		"""
+
+rule featureCounts:
+    input: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.sam"
+    output: OUTPUTDIR+"/DESEQ2/featureCounts/{sampleName}",
+    threads: 6
+    shell:"""
+        featureCounts -a {GTF} -o {output} -J -G {FASTA} -s 2 -p -B -T {threads} --extraAttributes gene_name {input}
+    """
+
+rule samToBam:
+	input: 	OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.sam"
+	output: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.bam"
+	threads: 6
+	shell: 	"samtools view --threads {threads} -b -o {output} {input}"
+
+
+rule createBamIndex:
+	input: 	OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.bam"
+	output: OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.bam.bai"
+	threads: 6
+	shell: 	"samtools index -@ {threads} -b {input} {output}"
+
+rule stringTie:
+	input: bam = OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.bam",
+		bai = OUTPUTDIR+"/Samples/{sampleName}/hisat2/{sampleName}.poSrt.bam.bai"
+	output: gene=OUTPUTDIR+"/DESEQ2/stringTie/{sampleName}/gene_abundances.tsv",
+		tr=OUTPUTDIR+"/DESEQ2/stringTie/{sampleName}/transcripts.gtf",
+		logFile = OUTPUTDIR+"/DESEQ2/stringTie/{sampleName}/logFile.txt"
+	threads: 6
+	shell:"""
+	stringtie -p {threads} -G {GTF} -e -A {output.gene} -B -o {output.tr} {input.bam} > {output.logFile}
+	"""
